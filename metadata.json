@@ -1,0 +1,5 @@
+{
+  "name": "AziLearn Admin Dashboard",
+  "description": "Management console for AziLearn EdTech platform experiments and lessons.",
+  "requestFramePermissions": []
+}
