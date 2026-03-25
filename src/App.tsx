@@ -35,10 +35,11 @@ let supabaseClient: any = null;
 const getSupabase = () => {
   if (supabaseClient) return supabaseClient;
   
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  // Check both standard Vite prefix and process.env (for AI Studio compatibility)
+  const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   
-  if (!url || !key) return null;
+  if (!url || !key || url === 'undefined' || key === 'undefined') return null;
   
   supabaseClient = createClient(url, key);
   return supabaseClient;
@@ -149,9 +150,9 @@ export default function App() {
   const fetchExperiments = async () => {
     const supabase = getSupabase();
     if (!supabase) {
-      const url = process.env.SUPABASE_URL;
-      const key = process.env.SUPABASE_ANON_KEY;
-      setError(`Supabase keys are missing. URL: ${url ? 'Set' : 'Missing'}, Key: ${key ? 'Set' : 'Missing'}. Please add them to your secrets.`);
+      const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const key = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+      setError(`Supabase keys are missing. URL: ${url ? 'Set' : 'Missing'}, Key: ${key ? 'Set' : 'Missing'}. Please add them to your Vercel Environment Variables.`);
       setIsLoading(false);
       return;
     }
