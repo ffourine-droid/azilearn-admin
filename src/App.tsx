@@ -149,13 +149,16 @@ export default function App() {
   const fetchExperiments = async () => {
     const supabase = getSupabase();
     if (!supabase) {
-      setError("Supabase keys are missing. Please add SUPABASE_URL and SUPABASE_ANON_KEY to your secrets.");
+      const url = process.env.SUPABASE_URL;
+      const key = process.env.SUPABASE_ANON_KEY;
+      setError(`Supabase keys are missing. URL: ${url ? 'Set' : 'Missing'}, Key: ${key ? 'Set' : 'Missing'}. Please add them to your secrets.`);
       setIsLoading(false);
       return;
     }
 
     try {
       setIsLoading(true);
+      setError(null);
       const { data, error } = await supabase
         .from('experiments')
         .select('*')
@@ -165,7 +168,7 @@ export default function App() {
       setExperiments(data || []);
     } catch (err: any) {
       console.error('Error fetching experiments:', err);
-      setError(err.message);
+      setError(`Fetch failed: ${err.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -325,7 +328,15 @@ export default function App() {
           />
           
           <div className="flex items-center gap-2">
-            <button className="p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:bg-gray-50 transition-colors">
+            <button 
+              onClick={() => {
+                fetchExperiments();
+                fetchPayments();
+                fetchProfiles();
+              }}
+              className="p-3 bg-white border border-gray-100 rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
+              title="Refresh Data"
+            >
               <Database size={20} className="text-[#1A1A1A]" />
             </button>
             <button className="p-3 bg-red-50 rounded-xl hover:bg-red-100 transition-colors">
@@ -372,9 +383,36 @@ export default function App() {
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-100 p-4 rounded-2xl text-red-600 font-medium">
-              {error}
-              <p className="text-sm mt-1">Make sure you have created the 'experiments' table in Supabase.</p>
+            <div className="bg-red-50 border border-red-100 p-6 rounded-2xl flex flex-col gap-4">
+              <div className="flex items-center gap-3 text-red-600">
+                <Database size={24} />
+                <h3 className="font-black uppercase tracking-widest text-sm">Connection Error</h3>
+              </div>
+              <p className="text-red-600 font-medium">{error}</p>
+              <div className="flex flex-wrap gap-4 mt-2">
+                <button 
+                  onClick={() => {
+                    fetchExperiments();
+                    fetchPayments();
+                    fetchProfiles();
+                  }}
+                  className="px-6 py-2 bg-red-600 text-white rounded-full font-bold text-sm hover:bg-red-700 transition-colors"
+                >
+                  Retry Connection
+                </button>
+                <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-red-100 text-[10px] font-bold text-red-400 uppercase tracking-widest">
+                  Status: {getSupabase() ? 'Client Initialized' : 'Client Failed'}
+                </div>
+              </div>
+              <div className="mt-4 p-4 bg-white/50 rounded-xl border border-red-100/50">
+                <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-2">Troubleshooting Steps:</p>
+                <ul className="text-xs text-red-500 space-y-1 list-disc list-inside">
+                  <li>Check if <code>SUPABASE_URL</code> and <code>SUPABASE_ANON_KEY</code> are set in your environment.</li>
+                  <li>Ensure the <code>experiments</code> table exists in your Supabase project.</li>
+                  <li>Verify that Row Level Security (RLS) policies allow SELECT operations.</li>
+                  <li>Check your browser console for more detailed network errors.</li>
+                </ul>
+              </div>
             </div>
           )}
 
