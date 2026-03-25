@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   Home, 
@@ -18,8 +18,34 @@ import {
   X,
   Music,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  BarChart3,
+  PieChart as PieChartIcon,
+  Calendar as CalendarIcon,
+  Users,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Search
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  LineChart, 
+  Line, 
+  PieChart, 
+  Pie, 
+  Cell,
+  AreaChart,
+  Area,
+  Legend
+} from 'recharts';
+import { format, subDays, startOfDay, isWithinInterval, parseISO, eachDayOfInterval } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -36,8 +62,8 @@ const getSupabase = () => {
   if (supabaseClient) return supabaseClient;
   
   // Check both standard Vite prefix and process.env (for AI Studio compatibility)
-  const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
   
   if (!url || !key || url === 'undefined' || key === 'undefined') return null;
   
@@ -76,9 +102,263 @@ interface Profile {
   username: string;
   phone_number: string;
   created_at: string;
+  last_active?: string;
+  avatar_url?: string;
 }
 
-// --- COMPONENTS ---
+interface UserPresence {
+  id: string;
+  online_at: string;
+}
+
+const AnalyticsView = ({ 
+  experiments, 
+  payments, 
+  profiles 
+}: { 
+  experiments: Experiment[], 
+  payments: Payment[], 
+  profiles: Profile[] 
+}) => {
+  // 1. Revenue Over Time (Last 7 Days)
+  const revenueData = useMemo(() => {
+    const last7Days = eachDayOfInterval({
+      start: subDays(new Date(), 6),
+      end: new Date()
+    });
+
+    return last7Days.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dayRevenue = payments
+        .filter(p => p.status === 'approved' && p.created_at.startsWith(dateStr))
+        .reduce((sum, p) => sum + (p.amount || 0), 0);
+      
+      return {
+        date: format(day, 'MMM dd'),
+        revenue: dayRevenue
+      };
+    });
+  }, [payments]);
+
+  // 2. User Growth (Last 7 Days)
+  const userGrowthData = useMemo(() => {
+    const last7Days = eachDayOfInterval({
+      start: subDays(new Date(), 6),
+      end: new Date()
+    });
+
+    return last7Days.map(day => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const dayUsers = profiles.filter(p => p.created_at.startsWith(dateStr)).length;
+      
+      return {
+        date: format(day, 'MMM dd'),
+        users: dayUsers
+      };
+    });
+  }, [profiles]);
+
+  // 3. Subject Distribution
+  const subjectData = useMemo(() => {
+    const subjects: Record<string, number> = {};
+    experiments.forEach(e => {
+      subjects[e.subject] = (subjects[e.subject] || 0) + 1;
+    });
+
+    return Object.entries(subjects).map(([name, value]) => ({ name, value }));
+  }, [experiments]);
+
+  // 4. Payment Status Breakdown
+  const paymentStatusData = useMemo(() => {
+    const statuses: Record<string, number> = {};
+    payments.forEach(p => {
+      statuses[p.status] = (statuses[p.status] || 0) + 1;
+    });
+
+    return Object.entries(statuses).map(([name, value]) => ({ name, value }));
+  }, [payments]);
+
+  const COLORS = ['#F97316', '#8B5CF6', '#10B981', '#EF4444', '#3B82F6', '#F59E0B'];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
+      {/* Revenue Trend */}
+      <div className="bg-white p-6 rounded-[32px] shadow-sm border border-gray-50 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-orange-50 rounded-xl">
+              <TrendingUp size={20} className="text-[#F97316]" />
+            </div>
+            <h3 className="font-black text-[#1A1A1A]">Revenue Trend (7 Days)</h3>
+          </div>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={revenueData}>
+              <defs>
+                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#F97316" stopOpacity={0.1}/>
+                  <stop offset="95%" stopColor="#F97316" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
+              <XAxis 
+                dataKey="date" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 700, fill: '#888888' }}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 700, fill: '#888888' }}
+              />
+              <Tooltip 
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                labelStyle={{ fontWeight: 800, color: '#1A1A1A' }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="revenue" 
+                stroke="#F97316" 
+                strokeWidth={3}
+                fillOpacity={1} 
+                fill="url(#colorRevenue)" 
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* User Growth */}
+      <div className="bg-white p-6 rounded-[32px] shadow-sm border border-gray-50 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-50 rounded-xl">
+              <Users size={20} className="text-purple-500" />
+            </div>
+            <h3 className="font-black text-[#1A1A1A]">User Growth (7 Days)</h3>
+          </div>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={userGrowthData}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F5F5" />
+              <XAxis 
+                dataKey="date" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 700, fill: '#888888' }}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 700, fill: '#888888' }}
+              />
+              <Tooltip 
+                cursor={{ fill: '#F97316', opacity: 0.05 }}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                labelStyle={{ fontWeight: 800, color: '#1A1A1A' }}
+              />
+              <Bar dataKey="users" fill="#8B5CF6" radius={[6, 6, 0, 0]} barSize={30} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Subject Distribution */}
+      <div className="bg-white p-6 rounded-[32px] shadow-sm border border-gray-50 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-50 rounded-xl">
+              <LayoutGrid size={20} className="text-blue-500" />
+            </div>
+            <h3 className="font-black text-[#1A1A1A]">Materials by Subject</h3>
+          </div>
+        </div>
+        <div className="h-[300px] w-full flex flex-col md:flex-row items-center">
+          <div className="w-full md:w-1/2 h-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={subjectData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {subjectData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="w-full md:w-1/2 flex flex-col gap-2">
+            {subjectData.map((entry, index) => (
+              <div key={entry.name} className="flex items-center justify-between px-4 py-2 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span className="text-xs font-bold text-[#1A1A1A]">{entry.name}</span>
+                </div>
+                <span className="text-xs font-black text-[#888888]">{entry.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Status */}
+      <div className="bg-white p-6 rounded-[32px] shadow-sm border border-gray-50 flex flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 rounded-xl">
+              <CheckCircle2 size={20} className="text-emerald-500" />
+            </div>
+            <h3 className="font-black text-[#1A1A1A]">Payment Status Breakdown</h3>
+          </div>
+        </div>
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={paymentStatusData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F5F5F5" />
+              <XAxis type="number" hide />
+              <YAxis 
+                dataKey="name" 
+                type="category" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{ fontSize: 10, fontWeight: 700, fill: '#1A1A1A' }}
+                width={80}
+              />
+              <Tooltip 
+                cursor={{ fill: '#F97316', opacity: 0.05 }}
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+              />
+              <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={30}>
+                {paymentStatusData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={
+                      entry.name === 'approved' ? '#10B981' : 
+                      entry.name === 'rejected' ? '#EF4444' : 
+                      '#F97316'
+                    } 
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Badge = ({ children, variant = 'general' }: { children: React.ReactNode, variant?: 'general' | 'category' }) => {
   if (variant === 'category') {
@@ -130,8 +410,13 @@ const InputField = ({ label, children }: { label: string, children: React.ReactN
 export default function App() {
   const [activeTab, setActiveTab] = useState('Content');
   const [experiments, setExperiments] = useState<Experiment[]>([]);
+  const [totalExperiments, setTotalExperiments] = useState(0);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [totalPayments, setTotalPayments] = useState(0);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [totalProfiles, setTotalProfiles] = useState(0);
+  const [onlineUsers, setOnlineUsers] = useState<Record<string, UserPresence>>({});
+  const [userSearch, setUserSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,8 +435,8 @@ export default function App() {
   const fetchExperiments = async () => {
     const supabase = getSupabase();
     if (!supabase) {
-      const url = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-      const key = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+      const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
       setError(`Supabase keys are missing. URL: ${url ? 'Set' : 'Missing'}, Key: ${key ? 'Set' : 'Missing'}. Please add them to your Vercel Environment Variables.`);
       setIsLoading(false);
       return;
@@ -160,13 +445,17 @@ export default function App() {
     try {
       setIsLoading(true);
       setError(null);
-      const { data, error } = await supabase
+      // Optimize: Select only columns needed for the list view to reduce payload size
+      // Also get the total count for the dashboard stats
+      const { data, error, count } = await supabase
         .from('experiments')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, title, subject, grade, category, created_at, keywords', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setExperiments(data || []);
+      if (count !== null) setTotalExperiments(count);
     } catch (err: any) {
       console.error('Error fetching experiments:', err);
       setError(`Fetch failed: ${err.message || 'Unknown error'}`);
@@ -181,16 +470,18 @@ export default function App() {
 
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      // Optimize: Select only necessary columns and limit to 100
+      const { data, error, count } = await supabase
         .from('payments')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('id, phone_number, plan, amount, status, created_at, rejection_reason, transaction_code', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) throw error;
       setPayments(data || []);
+      if (count !== null) setTotalPayments(count);
     } catch (err: any) {
       console.error('Error fetching payments:', err);
-      // Don't set global error here to avoid blocking experiments if payments fail
     } finally {
       setIsLoading(false);
     }
@@ -202,13 +493,15 @@ export default function App() {
 
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      // Fetch all users as requested
+      const { data, error, count } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, username, phone_number, created_at, last_active', { count: 'exact' })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setProfiles(data || []);
+      if (count !== null) setTotalProfiles(count);
     } catch (err: any) {
       console.error('Error fetching profiles:', err);
     } finally {
@@ -217,39 +510,87 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchExperiments();
-    fetchPayments();
-    fetchProfiles();
+    // Optimize: Fetch all data in parallel to reduce total loading time
+    const loadAllData = async () => {
+      await Promise.all([
+        fetchExperiments(),
+        fetchPayments(),
+        fetchProfiles()
+      ]);
+    };
+    
+    loadAllData();
 
     const supabase = getSupabase();
     if (supabase) {
-      // Real-time subscription for new payments
-      const paymentChannel = supabase
-        .channel('public:payments')
-        .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'payments' 
-        }, (payload) => {
-          setPayments(prev => [payload.new as Payment, ...prev]);
+      // Real-time subscription for experiments
+      const experimentChannel = supabase
+        .channel('public:experiments')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'experiments' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setExperiments(prev => [payload.new as Experiment, ...prev]);
+            setTotalExperiments(prev => prev + 1);
+          } else if (payload.eventType === 'UPDATE') {
+            setExperiments(prev => prev.map(e => e.id === payload.new.id ? { ...e, ...payload.new } : e));
+          } else if (payload.eventType === 'DELETE') {
+            setExperiments(prev => prev.filter(e => e.id !== payload.old.id));
+            setTotalExperiments(prev => Math.max(0, prev - 1));
+          }
         })
         .subscribe();
 
-      // Real-time subscription for new profiles
+      // Real-time subscription for payments
+      const paymentChannel = supabase
+        .channel('public:payments')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setPayments(prev => [payload.new as Payment, ...prev]);
+            setTotalPayments(prev => prev + 1);
+          } else if (payload.eventType === 'UPDATE') {
+            setPayments(prev => prev.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
+          } else if (payload.eventType === 'DELETE') {
+            setPayments(prev => prev.filter(p => p.id !== payload.old.id));
+            setTotalPayments(prev => Math.max(0, prev - 1));
+          }
+        })
+        .subscribe();
+
+      // Real-time subscription for profiles
       const profileChannel = supabase
         .channel('public:profiles')
-        .on('postgres_changes', { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'profiles' 
-        }, (payload) => {
-          setProfiles(prev => [payload.new as Profile, ...prev]);
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setProfiles(prev => [payload.new as Profile, ...prev]);
+            setTotalProfiles(prev => prev + 1);
+          } else if (payload.eventType === 'UPDATE') {
+            setProfiles(prev => prev.map(p => p.id === payload.new.id ? { ...p, ...payload.new } : p));
+          } else if (payload.eventType === 'DELETE') {
+            setProfiles(prev => prev.filter(p => p.id !== payload.old.id));
+            setTotalProfiles(prev => Math.max(0, prev - 1));
+          }
+        })
+        .subscribe();
+
+      // Presence tracking
+      const presenceChannel = supabase.channel('online-users');
+      presenceChannel
+        .on('presence', { event: 'sync' }, () => {
+          const newState = presenceChannel.presenceState();
+          const online: Record<string, UserPresence> = {};
+          Object.values(newState).forEach((presences: any) => {
+            presences.forEach((p: any) => {
+              if (p.id) online[p.id] = p;
+            });
+          });
+          setOnlineUsers(online);
         })
         .subscribe();
 
       return () => {
+        supabase.removeChannel(experimentChannel);
         supabase.removeChannel(paymentChannel);
         supabase.removeChannel(profileChannel);
+        supabase.removeChannel(presenceChannel);
       };
     }
   }, []);
@@ -294,6 +635,35 @@ export default function App() {
     }
   };
 
+  const todayRevenue = payments
+    .filter(p => {
+      const today = new Date().toISOString().split('T')[0];
+      return p.created_at.startsWith(today) && p.status === 'approved';
+    })
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const totalRevenue = payments
+    .filter(p => p.status === 'approved')
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const pendingPayments = payments.filter(p => p.status === 'pending').length;
+
+  const filteredProfiles = profiles.filter(p => 
+    p.full_name?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    p.phone_number?.includes(userSearch) ||
+    p.username?.toLowerCase().includes(userSearch.toLowerCase())
+  );
+
+  const getUserSubscription = (phoneNumber: string) => {
+    const userPayments = payments.filter(p => p.phone_number === phoneNumber && p.status === 'approved');
+    if (userPayments.length === 0) return 'None';
+    // Sort by date to get the latest
+    const latest = [...userPayments].sort((a, b) => 
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    )[0];
+    return latest.plan;
+  };
+
   return (
     <div className="min-h-screen p-6 max-w-7xl mx-auto flex flex-col gap-6">
       {/* --- HEADER --- */}
@@ -310,20 +680,26 @@ export default function App() {
 
         <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
           <StatCard 
+            label="Materials" 
+            value={totalExperiments.toString()} 
+            icon={LayoutGrid} 
+            iconColor="bg-blue-50 text-blue-500" 
+          />
+          <StatCard 
             label="Revenue Today" 
-            value="KES 10" 
+            value={`KES ${todayRevenue}`} 
             icon={TrendingUp} 
             iconColor="bg-orange-50 text-[#F97316]" 
           />
           <StatCard 
             label="Total Revenue" 
-            value="KES 50" 
+            value={`KES ${totalRevenue}`} 
             icon={TrendingUp} 
             iconColor="bg-purple-50 text-purple-500" 
           />
           <StatCard 
             label="Pending" 
-            value="0" 
+            value={pendingPayments.toString()} 
             icon={Clock} 
             iconColor="bg-orange-50 text-[#F97316]" 
           />
@@ -366,6 +742,12 @@ export default function App() {
           icon={User} 
           active={activeTab === 'Users'} 
           onClick={() => setActiveTab('Users')} 
+        />
+        <TabButton 
+          label="Analytics" 
+          icon={BarChart3} 
+          active={activeTab === 'Analytics'} 
+          onClick={() => setActiveTab('Analytics')} 
         />
       </nav>
 
@@ -547,10 +929,26 @@ export default function App() {
       {/* --- USERS TAB --- */}
       {activeTab === 'Users' && (
         <main className="flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-[#1A1A1A]">User Profiles</h2>
-            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-100 shadow-sm">
-              <p className="text-xs font-bold text-[#888888] uppercase tracking-widest">Total Users: {profiles.length}</p>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-[#1A1A1A]">User Tracking</h2>
+              <p className="text-xs font-bold text-[#888888] uppercase tracking-widest mt-1">Monitor user activity and subscriptions</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#888888]" />
+                <input 
+                  type="text"
+                  placeholder="Search by name or phone..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="pl-11 pr-6 py-3 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 ring-orange-100 transition-all text-sm font-medium w-full md:w-64"
+                />
+              </div>
+              <div className="flex items-center gap-2 px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                <p className="text-xs font-bold text-[#1A1A1A]">{Object.keys(onlineUsers).length} Online</p>
+              </div>
             </div>
           </div>
 
@@ -565,33 +963,67 @@ export default function App() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-50">
-                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Joined Date</th>
-                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Full Name</th>
-                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Username</th>
-                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Phone Number</th>
+                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">User</th>
+                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Contact</th>
+                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Subscription</th>
+                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Activity</th>
+                      <th className="p-6 text-[10px] font-bold text-[#888888] uppercase tracking-widest">Joined</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {profiles.map((profile) => (
-                      <tr key={profile.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="p-6 text-sm font-medium text-[#888888]">
-                          {new Date(profile.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="p-6 text-sm font-bold text-[#1A1A1A]">
-                          {profile.full_name || 'N/A'}
-                        </td>
-                        <td className="p-6 text-sm font-medium text-[#888888]">
-                          {profile.username || 'N/A'}
-                        </td>
-                        <td className="p-6 text-sm font-bold text-[#F97316]">
-                          {profile.phone_number || 'N/A'}
-                        </td>
-                      </tr>
-                    ))}
-                    {profiles.length === 0 && (
+                    {filteredProfiles.map((profile) => {
+                      const isOnline = !!onlineUsers[profile.id];
+                      const subscription = getUserSubscription(profile.phone_number);
+                      
+                      return (
+                        <tr key={profile.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                          <td className="p-6">
+                            <div className="flex items-center gap-3">
+                              <div className="relative">
+                                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-[#1A1A1A] font-black text-xs">
+                                  {profile.full_name?.charAt(0) || 'U'}
+                                </div>
+                                {isOnline && (
+                                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-sm font-black text-[#1A1A1A]">{profile.full_name || 'Anonymous'}</p>
+                                <p className="text-[10px] font-bold text-[#888888] uppercase tracking-widest">@{profile.username || 'user'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            <p className="text-sm font-bold text-[#1A1A1A]">{profile.phone_number || 'N/A'}</p>
+                          </td>
+                          <td className="p-6">
+                            <span className={cn(
+                              "px-3 py-1 text-[10px] font-black rounded-full uppercase tracking-widest",
+                              subscription === 'None' ? "bg-gray-100 text-gray-500" : "bg-purple-50 text-purple-600"
+                            )}>
+                              {subscription}
+                            </span>
+                          </td>
+                          <td className="p-6">
+                            <div className="flex flex-col gap-1">
+                              <p className="text-xs font-bold text-[#1A1A1A]">
+                                {isOnline ? 'Active Now' : profile.last_active ? format(new Date(profile.last_active), 'MMM dd, HH:mm') : 'Unknown'}
+                              </p>
+                              {!isOnline && profile.last_active && (
+                                <p className="text-[10px] text-[#888888] font-medium italic">Last seen</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-6 text-sm font-medium text-[#888888]">
+                            {new Date(profile.created_at).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredProfiles.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="p-20 text-center text-[#888888] font-bold">
-                          No user profiles found.
+                        <td colSpan={5} className="p-20 text-center text-[#888888] font-bold">
+                          {userSearch ? `No users found matching "${userSearch}"` : "No user profiles found."}
                         </td>
                       </tr>
                     )}
@@ -741,6 +1173,31 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+      {/* --- ANALYTICS TAB --- */}
+      {activeTab === 'Analytics' && (
+        <main className="flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-black text-[#1A1A1A]">Real-time Analytics</h2>
+            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-100 shadow-sm">
+              <CalendarIcon size={14} className="text-[#888888]" />
+              <p className="text-xs font-bold text-[#888888] uppercase tracking-widest">Last 7 Days</p>
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <Loader2 className="animate-spin text-[#F97316]" size={40} />
+              <p className="text-[#888888] font-bold uppercase tracking-widest text-xs">Processing Analytics...</p>
+            </div>
+          ) : (
+            <AnalyticsView 
+              experiments={experiments} 
+              payments={payments} 
+              profiles={profiles} 
+            />
+          )}
+        </main>
+      )}
     </div>
   );
 }
